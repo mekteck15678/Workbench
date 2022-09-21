@@ -18,6 +18,7 @@ import {
 
 import { getPid, once } from "./troll/src/util.js";
 import WorkbenchHoverProvider from "./WorkbenchHoverProvider.js";
+import WorkbenchCompletionProvider from "./WorkbenchCompletionProvider.js";
 
 const { addSignalMethods } = imports.signals;
 
@@ -33,6 +34,8 @@ export default function PanelUI({ builder, data_dir, version, term_console }) {
   const buffer_xml = getLanguage("xml").document.buffer;
   const provider = new WorkbenchHoverProvider();
 
+  const completion_provider = new WorkbenchCompletionProvider();
+
   const blueprint = createBlueprintClient({
     data_dir,
     buffer: buffer_blueprint,
@@ -43,6 +46,7 @@ export default function PanelUI({ builder, data_dir, version, term_console }) {
   prepareSourceView({
     source_view: getLanguage("blueprint").document.source_view,
     provider,
+    completion_provider,
   });
 
   async function convertToXML() {
@@ -138,6 +142,24 @@ export default function PanelUI({ builder, data_dir, version, term_console }) {
       undo: scheduleUpdate,
       redo: scheduleUpdate,
     });
+
+    lang.document.buffer.connect("notify::cursor-position", async (self) => {
+      const iter_cursor = self.get_iter_at_offset(self.cursor_position);
+      try {
+        const result = await blueprint.request("textDocument/completion", {
+          textDocument: {
+            uri: "workbench://state.blp",
+          },
+          position: {
+            line: iter_cursor.get_line(),
+            character: iter_cursor.get_line_offset(),
+          },
+        });
+        console.log(result);
+      } catch (err) {
+        logError(err);
+      }
+    });
   }
 
   function stop() {
@@ -170,6 +192,7 @@ export default function PanelUI({ builder, data_dir, version, term_console }) {
         textDocument: {
           publishDiagnostics: {},
           "x-blueprintcompiler/publishCompiled": {},
+          completion: {},
         },
       },
       locale: "en",
@@ -258,9 +281,9 @@ function createBlueprintClient({ data_dir, buffer, provider }) {
     null
   );
   const blueprint = new LSPClient([
-    // "/home/sonny/Projects/Workbench/blueprint-compiler/blueprint-compiler.py",
+    "/home/sonny/Projects/Workbench/blueprint-compiler/blueprint-compiler.py",
     // "/app/bin/blueprint-compiler",
-    "blueprint-compiler",
+    // "blueprint-compiler",
     "lsp",
     "--logfile",
     file_blueprint_logs.get_path(),
@@ -285,7 +308,7 @@ function createBlueprintClient({ data_dir, buffer, provider }) {
   return blueprint;
 }
 
-function prepareSourceView({ source_view, provider }) {
+function prepareSourceView({ source_view, provider, completion_provider }) {
   const tag_table = source_view.buffer.get_tag_table();
   const tag = new Gtk.TextTag({
     name: "error",
@@ -296,6 +319,9 @@ function prepareSourceView({ source_view, provider }) {
   const hover = source_view.get_hover();
   // hover.hover_delay = 25;
   hover.add_provider(provider);
+
+  const completion = source_view.get_completion();
+  completion.add_provider(completion_provider);
 }
 
 function handleDiagnostics({ diagnostics, buffer, provider }) {
