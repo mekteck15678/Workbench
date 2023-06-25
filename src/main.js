@@ -1,17 +1,12 @@
-import GLib from "gi://GLib";
-import { bindtextdomain, textdomain } from "gettext";
-
+import "./init.js";
 import "./log_handler.js";
-import Application from "./application.js";
+import application from "./application.js";
 
-export default function main(argv, { version, datadir }) {
-  bindtextdomain(
-    "re.sonny.Workbench",
-    GLib.build_filenamev([datadir, "locale"])
-  );
-  textdomain("re.sonny.Workbench");
+pkg.initGettext();
 
-  const application = Application({ version });
+import "./language-specs/blueprint.lang";
+import "./style.css";
 
-  return application.run(argv);
+export function main(argv) {
+  return application.runAsync(argv);
 }

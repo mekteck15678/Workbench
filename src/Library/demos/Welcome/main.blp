@@ -9,20 +9,24 @@ Box welcome {
     name: "logo";
     icon-name: "re.sonny.Workbench";
     pixel-size: 196;
-    margin-bottom: 24;
+    margin-bottom: 30;
     styles ["icon-dropshadow"]
   }
 
   Label {
     label: "Welcome to Workbench";
-    margin-bottom: 24;
+    margin-bottom: 30;
     styles ["title-1"]
   }
 
-  Label {
-    label: "Learn and prototype with\nGNOME technologies";
-    margin-bottom: 24;
-    justify: center;
+  Box subtitle {
+    orientation: vertical;
+    halign: center;
+    margin-bottom: 30;
+    Label {
+      label: "Learn and prototype with\nGNOME technologies";
+      justify: center;
+    }
   }
 
   Box {
@@ -30,19 +34,19 @@ Box welcome {
     homogeneous: true;
     halign: center;
     Box {
-      margin-bottom: 12;
+      margin-bottom: 6;
       Image {
         icon-name: "update-symbolic";
         margin-end: 12;
         icon-size: normal;
       }
       Label {
-        label: "Edit Style and UI to reload the Preview";
+        label: "Edit Style or UI to update the Preview";
       }
     }
 
     Box {
-      margin-bottom: 12;
+      margin-bottom: 6;
       Image {
         icon-name: "media-playback-start-symbolic";
         margin-end: 12;
@@ -61,7 +65,7 @@ Box welcome {
     }
 
     Box {
-      margin-bottom: 12;
+      margin-bottom: 6;
       Image {
         icon-name: "media-floppy-symbolic";
         margin-end: 12;
@@ -73,7 +77,19 @@ Box welcome {
     }
 
     Box {
-      margin-bottom: 12;
+      margin-bottom: 6;
+      Image {
+        icon-name: "library-symbolic";
+        margin-end: 12;
+        icon-size: normal;
+      }
+      Label {
+        label: "Browse the Library for demos and examples";
+      }
+    }
+
+    Box {
+      margin-bottom: 6;
       Image {
         icon-name: "user-bookmarks-symbolic";
         margin-end: 12;
@@ -81,18 +97,6 @@ Box welcome {
       }
       Label {
         label: "Checkout the Bookmarks menu to learn and get help";
-      }
-    }
-
-    Box {
-      margin-bottom: 12;
-      Image {
-        icon-name: "open-book-symbolic";
-        margin-end: 12;
-        icon-size: normal;
-      }
-      Label {
-        label: "Browse the Library for demos and examples";
       }
     }
   }

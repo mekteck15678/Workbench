@@ -7,13 +7,14 @@ import {
   getGIRepositoryVersion,
   getGjsVersion,
   getGLibVersion,
-} from "./troll/src/util.js";
+} from "../troll/src/util.js";
 import { getFlatpakInfo } from "./util.js";
 
-export default function About({ application, version }) {
+export default function About({ application }) {
   const flatpak_info = getFlatpakInfo();
 
   const debug_info = `
+${pkg.name} ${pkg.version}
 ${GLib.get_os_info("ID")} ${GLib.get_os_info("VERSION_ID")}
 
 GJS ${getGjsVersion()}
@@ -26,15 +27,14 @@ ${getBlueprintVersion()}
 `.trim();
 
   const dialog = new Adw.AboutWindow({
+    transient_for: application.get_active_window(),
     application_name: "Workbench",
     developer_name: "Sonny Piers",
-    copyright: "Copyright 2022 Sonny Piers",
+    copyright: "© 2022 Sonny Piers",
     license_type: Gtk.License.GPL_3_0_ONLY,
-    version,
-    transient_for: application.get_active_window(),
-    modal: true,
+    version: pkg.version,
     website: "https://workbench.sonny.re",
-    application_icon: "re.sonny.Workbench",
+    application_icon: pkg.name,
     issue_url: "https://github.com/sonnyp/Workbench/issues",
     // TRANSLATORS: eg. 'Translator Name <your.email@domain.com>' or 'Translator Name https://website.example'
     translator_credits: _("translator-credits"),
@@ -43,12 +43,29 @@ ${getBlueprintVersion()}
       "Sonny Piers https://sonny.re",
       "Lorenz Wildberg https://gitlab.gnome.org/lwildberg",
     ],
-    designers: ["Tobias Bernard <tbernard@gnome.org>"],
+    designers: [
+      "Sonny Piers https://sonny.re",
+      "Tobias Bernard <tbernard@gnome.org>",
+    ],
+    artists: [
+      "Tobias Bernard <tbernard@gnome.org>",
+      "Jakub Steiner https://jimmac.eu",
+    ],
   });
 
   dialog.add_credit_section(_("Contributors"), [
+    "Akshay Warrier https://github.com/AkshayWarrier",
     "Ben Foote http://www.bengineeri.ng",
+    "Brage Fuglseth https://bragefuglseth.dev",
     "Hari Rana (TheEvilSkeleton) https://theevilskeleton.gitlab.io",
+    "Sriyansh Shivam https://linktr.ee/sonic_here",
+    "Angelo Verlain https://www.vixalien.com",
+    "bazylevnik0 https://github.com/bazylevnik0",
+    "Felipe Kinoshita https://mastodon.social/@fkinoshita",
+    "Karol Lademan https://github.com/karl0d",
+    "Nasah Kuma https://www.mantohnasah.com/",
+    "Jose Hunter https://github.com/halfmexican/",
+    "Akunne Pascal https://github.com/Kodecheff",
     // Add yourself as
     // "John Doe",
     // or
@@ -67,6 +84,5 @@ function getValaVersion() {
 }
 
 function getBlueprintVersion() {
-  // https://gitlab.gnome.org/jwestman/blueprint-compiler/-/issues/61
-  return "Blueprint 0.4.0-Workbench";
+  return "Blueprint 0.8.1";
 }

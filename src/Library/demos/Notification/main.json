@@ -1,0 +1,7 @@
+{
+  "name": "Notification",
+  "category": "feedback",
+  "description": "Desktop notifications are a useful way of communicating with users while they are using other applications.",
+  "panels": ["code", "preview"],
+  "autorun": true
+}

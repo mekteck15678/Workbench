@@ -3,7 +3,7 @@ using Adw 1;
 
 Adw.PreferencesWindow library {
   hide-on-close: true;
-  modal: true;
+  modal: false;
   title: _("Library");
   default-height: 700;
   default-width: 700;
@@ -11,7 +11,7 @@ Adw.PreferencesWindow library {
   Adw.PreferencesPage {
     Adw.PreferencesGroup {
       Label {
-        label: _('Learn, test, remix');
+        label: _('Learn, Test, Remix');
         styles ["title-1"]
       }
     }
@@ -20,15 +20,35 @@ Adw.PreferencesWindow library {
     }
 
     Adw.PreferencesGroup library_tools {
-      title: "Tools";
+      title: _("Tools");
     }
 
     Adw.PreferencesGroup library_network {
-      title: "Network";
+      title: _("Network");
+    }
+
+    Adw.PreferencesGroup library_controls {
+      title: _("Controls");
+    }
+
+    Adw.PreferencesGroup library_layout {
+      title: _("Layout");
+    }
+
+    Adw.PreferencesGroup library_feedback {
+      title: _("Feedback");
+    }
+
+    Adw.PreferencesGroup library_navigation {
+      title: _("Navigation");
     }
 
     Adw.PreferencesGroup library_user_interface {
       title: "User Interface";
+    }
+
+    Adw.PreferencesGroup library_platform {
+      title: "Platform APIs";
     }
 
     Adw.PreferencesGroup {

@@ -1,30 +1,29 @@
 import Gtk from "gi://Gtk";
+import Gdk from "gi://Gdk";
 import GObject from "gi://GObject";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
-import * as xml from "../xml.js";
+import * as xml from "../langs/xml/xml.js";
 import * as postcss from "../lib/postcss.js";
 
-import {
-  getLanguage,
-  connect_signals,
-  disconnect_signals,
-  settings,
-} from "../util.js";
+import { encode, settings, unstack } from "../util.js";
 
 import Internal from "./Internal.js";
 import External from "./External.js";
-import { getClassNameType } from "../overrides.js";
+import { getClassNameType, registerClass } from "../overrides.js";
 
-import { assertBuildable, getObjectClass } from "./utils.js";
+import { assertBuildable, detectCrash, isPreviewable } from "./utils.js";
 
-// Workbench always defaults to in-process preview now even if Vala is selected.
-// Workbench will switch to out-of-process preview when Vala is run
-// Workbench will switch back to inline preview if any of the following happens
-//  • When a demo is selected
-//  • When the out-of-process preview Window closed
-//  • When switching language
+/*
+  Always default to in-process preview
+  Switch to out-of-process preview when Vala is run
+  Switch back to in-process preview if any of the following happens
+   • A demo is loaded
+   • The out-of-process preview Window closed
+   • Switching language
+   * A file is open
+*/
 
 export default function Previewer({
   output,
@@ -34,7 +33,6 @@ export default function Previewer({
   application,
   data_dir,
   term_console,
-  panel_style,
 }) {
   let panel_code;
 
@@ -43,10 +41,7 @@ export default function Previewer({
   const dropdown_preview_align = builder.get_object("dropdown_preview_align");
   // TODO: File a bug libadwaita
   // flat does nothing on GtkDropdown or GtkComboBox or GtkComboBoxText
-  dropdown_preview_align
-    .get_first_child()
-    .get_style_context()
-    .add_class("flat");
+  dropdown_preview_align.get_first_child().add_css_class("flat");
 
   const internal = Internal({
     onWindowChange(open) {
@@ -62,7 +57,7 @@ export default function Previewer({
     window,
     application,
     dropdown_preview_align,
-    panel_style,
+    panel_ui,
   });
   const external = External({
     onWindowChange(open) {
@@ -70,18 +65,19 @@ export default function Previewer({
       if (open) {
         stack.set_visible_child_name("close_window");
       } else {
-        useInternal();
+        stack.set_visible_child_name("open_window");
+        useInternal().catch(logError);
       }
     },
     output,
     builder,
-    panel_style,
+    panel_ui,
   });
 
-  const buffer_css = getLanguage("css").document.buffer;
+  const code_view_css = builder.get_object("code_view_css");
 
   let handler_id_ui = null;
-  let handler_ids_css = null;
+  let handler_id_css = null;
   let handler_id_button_open;
   let handler_id_button_close;
 
@@ -93,7 +89,7 @@ export default function Previewer({
     "preview-align",
     dropdown_preview_align,
     "selected",
-    Gio.SettingsBindFlags.DEFAULT
+    Gio.SettingsBindFlags.DEFAULT,
   );
   dropdown_preview_align.connect("notify::selected", setPreviewAlign);
   function setPreviewAlign() {
@@ -107,15 +103,12 @@ export default function Previewer({
   function start() {
     stop();
     if (handler_id_ui === null) {
-      handler_id_ui = panel_ui.connect("updated", update);
+      handler_id_ui = panel_ui.connect("updated", () => schedule_update());
     }
-    if (handler_ids_css === null) {
-      // cannot use "changed" signal as it triggers many time for pasting
-      handler_ids_css = connect_signals(buffer_css, {
-        "end-user-action": update,
-        undo: update,
-        redo: update,
-      });
+    if (handler_id_css === null) {
+      handler_id_css = code_view_css.connect("changed", () =>
+        schedule_update(),
+      );
     }
   }
 
@@ -124,50 +117,51 @@ export default function Previewer({
       panel_ui.disconnect(handler_id_ui);
       handler_id_ui = null;
     }
-
-    if (handler_ids_css) {
-      disconnect_signals(buffer_css, handler_ids_css);
-      handler_ids_css = null;
+    if (handler_id_css) {
+      code_view_css.disconnect(handler_id_css);
+      handler_id_css = null;
     }
   }
 
   // Using this custom scope we make sure that previewing UI definitions
   // with signals doesn't fail - in addition, checkout registerSignals
-  const BuilderScope = GObject.registerClass(
+  const BuilderScope = registerClass(
     {
       Implements: [Gtk.BuilderScope],
     },
     class BuilderScope extends GObject.Object {
       noop() {}
       // https://docs.gtk.org/gtk4/vfunc.BuilderScope.create_closure.html
-      vfunc_create_closure(builder, function_name, flags, object) {
+      vfunc_create_closure(_builder, function_name, flags, _object) {
         if (
           panel_code.panel.visible &&
           panel_code.language === "JavaScript" &&
           flags & Gtk.BuilderClosureFlags.SWAPPED
         ) {
           console.warning(
-            'Signal flag "swapped" is unsupported in JavaScript.'
+            'Signal flag "swapped" is unsupported in JavaScript.',
           );
         }
         return this[function_name] || this.noop;
       }
-    }
+    },
   );
 
+  settings.connect("changed::auto-preview", () => {
+    if (settings.get_boolean("auto-preview")) schedule_update();
+  });
   let symbols = null;
-  function update() {
-    const builder = new Gtk.Builder();
-    const scope = new BuilderScope();
-    builder.set_scope(scope);
-
+  async function update(force = false) {
+    if (!(force || settings.get_boolean("auto-preview"))) return;
     let text = panel_ui.xml.trim();
     let target_id;
     let tree;
     let original_id;
     let template;
 
-    if (!text) return;
+    if (!text) {
+      text = `<?xml version="1.0" encoding="UTF-8"?><interface><object class="GtkBox"></object></interface>";`;
+    }
 
     try {
       tree = xml.parse(text);
@@ -182,28 +176,34 @@ export default function Previewer({
     try {
       assertBuildable(tree);
     } catch (err) {
-      console.error(err);
+      console.warn(err.message);
       return;
     }
+
+    if (settings.get_boolean("safe-mode")) {
+      // console.time("detectCrash");
+      if (await detectCrash(text, target_id)) return;
+      // console.timeEnd("detectCrash");
+    }
+
+    const builder = new Gtk.Builder();
+    const scope = new BuilderScope();
+    builder.set_scope(scope);
 
     registerSignals({ tree, scope, symbols, template });
 
+    term_console.clear();
+
     try {
-      // For some reason this log warnings twice
       builder.add_from_string(text, -1);
     } catch (err) {
-      // The following while being obviously invalid
-      // does no produce an error - so we will need to strictly validate the XML
-      // before constructing the builder
-      // prettier-xml throws but doesn't give a stack trace
-      // <style>
-      //   <class name="title-1"
-      // </style>
+      if (err instanceof GLib.MarkupError || err instanceof Gtk.BuilderError) {
+        console.warn(err.message);
+        return;
+      }
       logError(err);
       return;
     }
-
-    term_console.clear();
 
     const object_preview = builder.get_object(target_id);
     if (!object_preview) return;
@@ -213,7 +213,7 @@ export default function Previewer({
     }
     dropdown_preview_align.visible = !!template;
 
-    current.updateXML({
+    await current.updateXML({
       xml: text,
       builder,
       object_preview,
@@ -221,24 +221,29 @@ export default function Previewer({
       original_id,
       template,
     });
-    panel_style.reset();
-    current.updateCSS(buffer_css.text);
+    code_view_css.clearDiagnostics();
+    await current.updateCSS(code_view_css.buffer.text);
     symbols = null;
   }
 
-  function useExternal() {
-    if (current === external) return;
-    stack.set_visible_child_name("open_window");
-    setPreviewer(external);
+  const schedule_update = unstack(update, logError);
+
+  async function useExternal() {
+    if (current !== external) {
+      await setPreviewer(external);
+    }
+    stack.set_visible_child_name("close_window");
+    await update(true);
   }
 
-  function useInternal() {
-    if (current === internal) return;
-    setPreviewer(internal);
-    update();
+  async function useInternal() {
+    if (current !== internal) {
+      await setPreviewer(internal);
+    }
+    await update(true);
   }
 
-  function setPreviewer(previewer) {
+  async function setPreviewer(previewer) {
     if (handler_id_button_open) {
       button_open.disconnect(handler_id_button_open);
     }
@@ -246,25 +251,43 @@ export default function Previewer({
       button_close.disconnect(handler_id_button_close);
     }
 
-    current?.stop();
-    current?.closeInspector();
+    try {
+      await current?.closeInspector();
+    } catch {}
+
+    try {
+      await current?.stop();
+    } catch {}
+
     current = previewer;
 
-    handler_id_button_open = button_open.connect("clicked", () => {
-      current.open();
-      stack.set_visible_child_name("close_window");
+    handler_id_button_open = button_open.connect("clicked", async () => {
+      try {
+        await current.open();
+        stack.set_visible_child_name("close_window");
+      } catch (err) {
+        logError(err);
+      }
     });
 
-    handler_id_button_close = button_close.connect("clicked", () => {
-      current.close();
-      stack.set_visible_child_name("open_window");
+    handler_id_button_close = button_close.connect("clicked", async () => {
+      try {
+        await current.close();
+        stack.set_visible_child_name("open_window");
+      } catch (err) {
+        logError(err);
+      }
     });
 
-    current.start();
+    try {
+      await current.start();
+    } catch (err) {
+      logError(err);
+    }
   }
 
   builder.get_object("button_screenshot").connect("clicked", () => {
-    current.screenshot({ window, data_dir });
+    screenshot({ application, window, data_dir, current }).catch(logError);
   });
 
   setPreviewer(internal);
@@ -275,13 +298,13 @@ export default function Previewer({
     stop,
     update,
     open() {
-      current.open();
+      return current.open();
     },
     close() {
-      current.close();
+      return current.close();
     },
     openInspector() {
-      current.openInspector();
+      return current.openInspector();
     },
     useExternal,
     useInternal,
@@ -305,7 +328,7 @@ export function scopeStylesheet(style) {
 
   for (const node of ast.nodes) {
     if (node.selector) {
-      node.selector = "#workbench_output " + node.selector;
+      node.selector = `#workbench_output ${node.selector}`;
     }
   }
 
@@ -317,8 +340,6 @@ export function scopeStylesheet(style) {
   return str;
 }
 
-const text_encoder = new TextEncoder();
-
 function getTemplate(tree) {
   const template = tree.getChild("template");
   if (!template) return;
@@ -326,17 +347,7 @@ function getTemplate(tree) {
   const { parent } = template.attrs;
   if (!parent) return;
 
-  const klass = getObjectClass(parent);
-  if (!klass) return;
-
-  // GLib-GObject-ERROR: cannot create instance of abstract (non-instantiatable) type 'GtkWidget'
-  if (parent === "GtkWidget") {
-    return;
-    // parent is not an instance of GtkWidget
-    // Error: Cannot instantiate abstract type GtkWidget
-  } else {
-    if (!GObject.type_is_a(klass, Gtk.Widget)) return;
-  }
+  if (!isPreviewable(parent)) return null;
 
   template.attrs.class = getClassNameType(template.attrs.class);
   const original = tree.toString();
@@ -356,7 +367,7 @@ function getTemplate(tree) {
     target_id: el.attrs.id,
     text: tree.toString(),
     original_id: undefined,
-    template: text_encoder.encode(original),
+    template: encode(original),
   };
 }
 
@@ -365,10 +376,7 @@ function findPreviewable(tree) {
     const class_name = child.attrs.class;
     if (!class_name) continue;
 
-    const klass = getObjectClass(class_name);
-    if (!klass) continue;
-
-    if (GObject.type_is_a(klass, Gtk.Widget)) return child;
+    if (isPreviewable(class_name)) return child;
   }
 }
 
@@ -378,7 +386,7 @@ function targetBuildable(tree) {
 
   const child = findPreviewable(tree);
   if (!child) {
-    return [null, ""];
+    return {};
   }
 
   const original_id = child.attrs.id;
@@ -390,7 +398,7 @@ function targetBuildable(tree) {
 
 function makeSignalHandler(
   { name, handler, after, id, type },
-  { symbols, template }
+  { symbols, template },
 ) {
   return function (object, ...args) {
     const symbol = symbols?.[handler];
@@ -399,7 +407,7 @@ function makeSignalHandler(
       symbol(object, ...args);
     }
 
-    const object_name = `${type}${id ? "$" + id : ""}`;
+    const object_name = `${type}${id ? `$${id}` : ""}`;
     // const object_name = object.toString(); // [object instance wrapper GIName:Gtk.Button jsobj@0x2937abc5c4c0 native@0x55fbfe53f620]
     const handler_type = (() => {
       if (template) return "Template";
@@ -409,7 +417,7 @@ function makeSignalHandler(
     const handler_when = after ? "after" : "for";
 
     console.log(
-      `${handler_type} handler "${handler}" triggered ${handler_when} signal "${name}" on ${object_name}`
+      `${handler_type} handler "${handler}" triggered ${handler_when} signal "${name}" on ${object_name}`,
     );
   };
 }
@@ -437,7 +445,7 @@ function findSignals(tree, signals = []) {
           type: object.attrs.class,
           ...el.attrs,
         };
-      })
+      }),
     );
 
     for (const child of object.getChildren("child")) {
@@ -453,4 +461,42 @@ function makeWorkbenchTargetId() {
 }
 function isWorkbenchTargetId(id) {
   return id.startsWith(target_id_prefix);
+}
+
+async function screenshot({ application, window, data_dir, current }) {
+  const date = new GLib.DateTime().format("%Y-%m-%d %H-%M-%S");
+  // FIXME: GJS does not have Gio.File.new_build_filename
+  const file = Gio.File.new_for_path(
+    GLib.build_filenamev([data_dir, "screenshots", `${date}.png`]),
+  );
+
+  try {
+    file.get_parent().make_directory_with_parents(null);
+  } catch (err) {
+    if (err.code !== Gio.IOErrorEnum.EXISTS) throw err;
+  }
+
+  const success = await current.screenshot({ window, path: file.get_path() });
+  if (!success) return;
+
+  const texture = Gdk.Texture.new_from_file(file);
+  const clipboard = Gdk.Display.get_default().get_clipboard();
+
+  const value = new GObject.Value();
+  value.init(Gdk.Texture);
+  value.set_object(texture);
+
+  clipboard.set(value);
+
+  const notification = new Gio.Notification();
+  const action = Gio.Action.print_detailed_name(
+    "app.show-screenshot",
+    new GLib.Variant("s", file.get_uri()),
+  );
+  notification.set_icon(new Gio.ThemedIcon({ name: "re.sonny.Workbench" }));
+  notification.set_title(_("Workbench Screenshot captured"));
+  notification.set_body(_("You can paste the image from the clipboard."));
+  notification.set_default_action(action);
+  notification.add_button(_("Show in Files"), action);
+  application.send_notification(null, notification);
 }

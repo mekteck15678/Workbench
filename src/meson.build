@@ -1,50 +1,37 @@
 bin_conf = configuration_data()
-bin_conf.set('GJS', find_program('gjs').path())
-bin_conf.set('PACKAGE_VERSION', meson.project_version())
-bin_conf.set('PACKAGE_NAME', meson.project_name())
+bin_conf.set('GJS', find_program('gjs').full_path())
+bin_conf.set('version', meson.project_version() + version_suffix)
+bin_conf.set('app_id', app_id)
 bin_conf.set('prefix', prefix)
 bin_conf.set('libdir', join_paths(get_option('prefix'), get_option('libdir')))
 bin_conf.set('datadir', datadir)
 bin_conf.set('pkgdatadir', pkgdatadir)
+bin_conf.set('sourcedir', meson.source_root())
 
-blueprints = custom_target('blueprints',
-  input: files(
-    'shortcutsWindow.blp',
-    'Library/Library.blp',
-    'Library/demos/Toasts/main.blp',
-    'Library/demos/WebSocket client/main.blp',
-    'Library/demos/Welcome/main.blp',
-    'Library/demos/Application window/main.blp',
-    'Library/demos/Custom widget/main.blp',
-    'Library/demos/Notifications/main.blp',
-    'Library/demos/Platform tools/main.blp',
-    'Library/demos/Icon Browser/main.blp',
-    'window.blp',
-    'ThemeSelector.blp',
-  ),
+blueprint_compiler = find_program(
+  '/app/bin/blueprint-compiler',
+)
+
+install_subdir('Library/demos', install_dir : join_paths(pkgdatadir, 'Library'))
+
+output = run_command('../build-aux/list-demo-blp-files.sh', check: true)
+blueprint_files = output.stdout().strip().split('\n')
+message('blueprint files: @0@'.format(blueprint_files))
+
+custom_target('blueprints',
+  input: blueprint_files,
   output: '.',
+  install: true,
+  install_dir: pkgdatadir,
   command: [
-    find_program(
-      # Flatpak
-      '/app/bin/blueprint-compiler',
-      # host
-      '../blueprint-compiler/blueprint-compiler.py'
-    ),
+    blueprint_compiler,
     'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'
   ],
 )
 
-data_res = gnome.compile_resources('workbench',
-  'workbench.gresource.xml',
-  dependencies: blueprints,
-  gresource_bundle: true,
-  install: true,
-  install_dir: pkgdatadir,
-)
-
 configure_file(
-  input: 're.sonny.Workbench',
-  output: 're.sonny.Workbench',
+  input: 'bin.js',
+  output: app_id,
   configuration: bin_conf,
   install: true,
   install_dir: get_option('bindir')
@@ -58,5 +45,26 @@ configure_file(
   install_dir: get_option('bindir')
 )
 
-install_data('workbench-api.vala', install_dir: datadir)
-subdir('Previewer/vala-previewer')
+install_data('langs/vala/workbench-api.vala', install_dir: pkgdatadir)
+subdir('Previewer')
+
+gjspack = find_program('../troll/gjspack/bin/gjspack')
+gresource = custom_target('gjspack',
+  input: ['main.js', '../po/POTFILES'],
+  output: app_id + '.src.gresource',
+  command: [
+    gjspack,
+    '--appid=' + app_id,
+    '--prefix', '/re/sonny/Workbench',
+    '--project-root', meson.source_root(),
+    '--resource-root', meson.project_source_root() / 'src',
+    '--blueprint-compiler', blueprint_compiler,
+    '--no-executable',
+    '@INPUT0@',
+    '--potfiles', '@INPUT1@',
+    '@OUTDIR@',
+  ],
+  install: true,
+  install_dir: pkgdatadir,
+  build_always_stale: true,
+)

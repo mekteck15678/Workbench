@@ -1,36 +1,29 @@
-import Gtk from "gi://Gtk?version=4.0";
+import Gtk from "gi://Gtk";
+import Adw from "gi://Adw";
 
-Gtk.init();
-
-const main = workbench.builder.get_object("welcome");
+const box = workbench.builder.get_object("subtitle");
 
 // https://gjs-docs.gnome.org/gtk40/gtk.button
 const button = new Gtk.Button({
   label: "Press me",
-  margin_top: 24,
+  margin_top: 6,
+  css_classes: ["suggested-action"],
 });
 button.connect("clicked", greet);
-main.append(button);
+box.append(button);
 
 console.log("Welcome to Workbench!");
 
 function greet() {
-  // https://gjs-docs.gnome.org/gtk40/gtk.messagedialog
-  const dialog = new Gtk.MessageDialog({
-    text: "Hello World!",
+  // https://gjs-docs.gnome.org/adw1~1/adw.messagedialog
+  const dialog = new Adw.MessageDialog({
+    body: "Hello World!",
     transient_for: workbench.window,
-    modal: true,
-    // https://gjs-docs.gnome.org/gtk40/gtk.buttonstype
-    buttons: Gtk.ButtonsType.OK,
   });
 
-  /*
-   * Gtk.MessageDialog inherits from Gtk.Dialog
-   * which possess a "response" signal
-   * https://gjs-docs.gnome.org/gtk40/gtk.dialog#signal-response
-   */
-  dialog.connect("response", () => {
-    dialog.close();
+  dialog.add_response("ok", "OK");
+  dialog.connect("response", (self, response) => {
+    console.log(response);
   });
 
   dialog.present();

@@ -1,6 +1,0 @@
-{
-  "name": "Platform tools",
-  "category": "tools",
-  "description": "Learn about and from GTK Inspector, Adwaita Demo, GTK Demo and GTK Widget Factory",
-  "panels": ["preview"]
-}

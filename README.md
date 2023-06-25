@@ -14,12 +14,14 @@ Among other things, Workbench comes with
 
 - realtime GTK/CSS preview
 - library of examples
-- 1000+ icons
 - JavaScript and Vala support
 - XML and Blueprint for describing user interface
 - syntax highlighting, undo/redo, autosave, session restore
-- code formatter
-- console logs
+- code linter and formatter
+- terminal output
+- 1000+ icons
+
+ℹ️ Workbench is made possible by Flatpak. Only Flathub Workbench is supported.
 
 **Testimonials**
 
@@ -62,43 +64,11 @@ Use GNOME Builder to start a new project using the appropriate GNOME Application
 
 </details>
 
-## Translation
-
-If you'd like to help translating Workbench into your language, please head over to [Weblate](https://hosted.weblate.org/engage/workbench/).
-
-<a href="https://hosted.weblate.org/engage/workbench/">
-  <img src="https://hosted.weblate.org/widgets/workbench/-/workbench/multi-auto.svg" alt="Translation status" />
-</a>
-
-Thank you for your help!
-
-## Development
-
-1. Install [GNOME Builder](https://apps.gnome.org/app/org.gnome.Builder/)
-2. Open Builder and select "Clone Repository..."
-3. Clone `https://github.com/sonnyp/Workbench.git` (or your fork)
-4. Press the Run ▶ button
-
-If you used an other method, don't forget to fetch the submodules.
-
-```sh
-cd Workbench
-git submodule update
-```
-
-Feel free to come by [#workbench:matrix.org](https://matrix.to/#/#workbench:matrix.org).
-
-## Packaging
-
-Please do not attempt to package Workbench any other way than as a Flatpak application.
-
-It is unsupported and may put users at risk.
-
 ## Credits
 
 Workbench would not be possible without
 
-GTK, GLib, Flatpak, GtkSourceView, libadwaita, VTE, GJS, Blueprint, icon-development-kit, Vala
+Flatpak, GTK, GLib, GtkSourceView, libadwaita, VTE, GJS, Blueprint, icon-development-kit, Vala
 
 and the GNOME community 🖤
 
@@ -111,37 +81,6 @@ and the GNOME community 🖤
 GPLv3. Please see [COPYING](COPYING) file.
 
 Except for everything under src/Library/demos which is in the public domain under the terms of [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
-
-## Maintainers
-
-### Release
-
-```sh
-$V = 45
-
-# Pull translatons
-git merge --squash l10n
-git commit -m 'Update translations'
-
-# Update version
-# bump version in meson.build
-git add meson.build
-
-git commit -m '$V'
-git tag '$V'
-git push
-git push origin $V
-```
-
-### Update icons
-
-```
-cd icon-development-kit-www
-git pull
-cd ..
-cp -r icon-development-kit-www/img/symbolic/**/*.svg data/icons/hicolor/scalable/actions/
-cat icon-development-kit-www/_data/icons.yaml | python -c 'import sys, yaml, json; print(json.dumps(yaml.safe_load(sys.stdin.read())))' > src/icon-development-kit.json
-```
 
 <details>
   <summary>
@@ -175,5 +114,9 @@ https://mastodon.online/@waimus/108582108701889960
 > as someone who is learning GTK, I can confirm that Workbench is definitely a must have for me!
 
 https://fosstodon.org/@TheEvilSkeleton/108598098682948266
+
+> I'm really new to development and workbench its being a fantastic help not just to code itself, but to understand the gtk logic.
+
+https://matrix.to/#/!kDBZrVKCdhrVuWxbGe:matrix.org/$XmIz7FA-UwpoiwHxDyzve1P-J1ecMHkL0x8Br23mUxg
 
 </details>
