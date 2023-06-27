@@ -10,6 +10,7 @@ import Adw from "gi://Adw";
 import Template from "./CodeView.blp" with { type: "uri" };
 
 import WorkbenchHoverProvider from "../WorkbenchHoverProvider.js";
+import WorkbenchCompletionProvider from "../WorkbenchCompletionProvider.js";
 import { registerClass } from "../overrides.js";
 
 Source.init();
@@ -28,6 +29,7 @@ class CodeView extends Gtk.Widget {
       this.buffer.set_language(this.language);
 
       this.#prepareHoverProvider();
+      this.#prepareCompletionProvider();
       this.#prepareSignals();
       this.#updateStyle();
     } catch (err) {
@@ -79,6 +81,29 @@ class CodeView extends Gtk.Widget {
     const hover = this.source_view.get_hover();
     // hover.hover_delay = 25;
     hover.add_provider(provider);
+  }
+
+  #prepareCompletionProvider() {
+    const completion_provider = new WorkbenchCompletionProvider();
+    this.buffer.connect("notify::cursor-position", async (self) => {
+      const iter_cursor = self.get_iter_at_offset(self.cursor_position);
+      try {
+        const result = await blueprint.request("textDocument/completion", {
+          textDocument: {
+            uri: "workbench://state.blp",
+          },
+          position: {
+            line: iter_cursor.get_line(),
+            character: iter_cursor.get_line_offset(),
+          },
+        });
+        console.log(result);
+      } catch (err) {
+        logError(err);
+      }
+    });
+    const completion = this.source_view.get_completion();
+    completion.add_provider(completion_provider);
   }
 
   clearDiagnostics() {

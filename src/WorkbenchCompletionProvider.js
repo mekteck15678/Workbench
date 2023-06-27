@@ -21,7 +21,7 @@ class WorkbenchCompletionProvider extends GObject.Object {
     //   return false;
     // }
 
-    // return true;
+    return true;
   }
 }
 
@@ -30,5 +30,5 @@ export default GObject.registerClass(
     GTypeName: "WorkbenchCompletionProvider",
     Implements: [Source.CompletionProvider],
   },
-  WorkbenchCompletionProvider
+  WorkbenchCompletionProvider,
 );
