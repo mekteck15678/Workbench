@@ -10,13 +10,76 @@ import Adw from "gi://Adw";
 import Template from "./CodeView.blp" with { type: "uri" };
 
 import WorkbenchHoverProvider from "../WorkbenchHoverProvider.js";
-import WorkbenchCompletionProvider from "../WorkbenchCompletionProvider.js";
 import { registerClass } from "../overrides.js";
+
+import Workbench from "gi://Workbench";
 
 Source.init();
 
 const scheme_manager = Source.StyleSchemeManager.get_default();
 const style_manager = Adw.StyleManager.get_default();
+
+const CompletionProvider = GObject.registerClass(
+  {
+    GTypeName: "CompletionProvider",
+    Implements: [Source.CompletionProvider],
+  },
+  class CompletionProvider extends Workbench.CompletionProvider {
+    constructor(source_view) {
+      super();
+      this.source_view = source_view;
+    }
+
+    vfunc_activate(context, proposal) {
+      console.log(proposal);
+      this.source_view.push_snippet(
+        Source.Snippet.new_parsed(proposal.get_typed_text()),
+        null,
+      );
+    }
+
+    vfunc_display(context, proposal, cell) {
+      log("display", proposal.label, cell.get_column());
+      switch (cell.get_column()) {
+        // case Source.CompletionColumn.ICON:
+        //   var image = new Gtk.Image ();
+        //   image_cache.request_paintable (emoji.url, (is_loaded, paintable) => {
+        //     image.paintable = paintable;
+        //   });
+        //   cell.set_widget (image);
+        //   break;
+        // case Source.CompletionColumn.ICON:
+        //   cell.set_icon_name("re.sonny.Workbench-symbolic");
+        //   break;
+        case Source.CompletionColumn.TYPED_TEXT:
+          cell.set_text(proposal.get_typed_text());
+          break;
+        default:
+          cell.text = null;
+          break;
+      }
+      // log(context);
+      // log(proposals);
+    }
+  },
+);
+
+// class Proposal extends  {}
+const Proposal = GObject.registerClass(
+  {
+    Implements: [Source.CompletionProposal],
+  },
+  class Proposal extends GObject.Object {
+    constructor(completion_proposal) {
+      super();
+      Object.assign(this, completion_proposal);
+    }
+
+    get_typed_text() {
+      return this.label;
+    }
+  },
+);
 
 class CodeView extends Gtk.Widget {
   constructor({ language_id, ...params } = {}) {
@@ -84,24 +147,73 @@ class CodeView extends Gtk.Widget {
   }
 
   #prepareCompletionProvider() {
-    const completion_provider = new WorkbenchCompletionProvider();
-    this.buffer.connect("notify::cursor-position", async (self) => {
-      const iter_cursor = self.get_iter_at_offset(self.cursor_position);
-      try {
-        const result = await blueprint.request("textDocument/completion", {
-          textDocument: {
-            uri: "workbench://state.blp",
-          },
-          position: {
-            line: iter_cursor.get_line(),
-            character: iter_cursor.get_line_offset(),
-          },
+    const completion_provider = new CompletionProvider(this.source_view);
+
+    completion_provider.connect("completion-request", (provider, request) => {
+      console.log(`completion-request: ${request.context.get_word()}`);
+
+      const iter_cursor = request.context.get_bounds()[1];
+
+      // log(request.context.get_proposals_for_provider(completion_provider));
+
+      console.log(iter_cursor.get_line(), iter_cursor.get_line_offset());
+      // log(request.context.get_word());
+      this.blueprint
+        .completion(iter_cursor)
+        .then((result) => {
+          log("lol", result.length);
+          // log(result.length);
+          // log(result);
+          // console.log(result[0]);
+          // result.forEach((p) => {
+          //   log(Object.keys(p));
+          // });
+
+          // const list_store = Gio.ListStore.new(GObject.TYPE_OBJECT);
+
+          // list_store.append(new Proposal());
+
+          // completion.context.set_proposals_for_provider()
+
+          // const item = new GtkSource.CompletionItem({
+          //   label: "do_something()",
+          //   text: "do_something()",
+          // });
+
+          if (result[0]) {
+            request.add(new Proposal(result[0]));
+          }
+
+          request.state_changed(Workbench.RequestState.COMPLETE);
+        })
+        .catch((err) => {
+          logError(err);
+          request.state_changed(Workbench.RequestState.COMPLETE);
         });
-        console.log(result);
-      } catch (err) {
-        logError(err);
-      }
+
+      /* Pass around the `request` object, calling `request.add()` to append
+       * completion proposals, then call `request.state_changed()` with
+       * `Workbench.RequestState.CANCELLED` or `Workbench.RequestState.COMPLETE`
+       * to finish the request (and async function).
+       */
+      // GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      //   // request.state_changed(Workbench.RequestState.CANCELLED);
+      //   request.state_changed(Workbench.RequestState.COMPLETE);
+
+      //   return GLib.SOURCE_REMOVE;
+      // });
     });
+
+    // this.buffer.connect("notify::cursor-position", async (self) => {
+    //   if (!this.blueprint) return;
+    //   const iter_cursor = self.get_iter_at_offset(self.cursor_position);
+    //   try {
+    //     const result = await this.blueprint.hover(iter_cursor);
+    //     console.log(result);
+    //   } catch (err) {
+    //     logError(err);
+    //   }
+    // });
     const completion = this.source_view.get_completion();
     completion.add_provider(completion_provider);
   }

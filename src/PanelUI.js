@@ -55,6 +55,8 @@ export default function PanelUI({
     document: document_blueprint,
   });
 
+  code_view_blueprint.blueprint = blueprint;
+
   async function convertToXML() {
     term_console.clear();
     settings.set_boolean("show-console", true);

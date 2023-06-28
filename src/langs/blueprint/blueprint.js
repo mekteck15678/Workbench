@@ -16,6 +16,29 @@ export function setup({ data_dir, document }) {
 
   return {
     lspc,
+    async completion(iter_cursor) {
+      log(iter_cursor.get_line_offset());
+      return lspc.request("textDocument/completion", {
+        textDocument: {
+          uri: file.get_uri(),
+        },
+        position: {
+          line: iter_cursor.get_line(),
+          character: iter_cursor.get_line_offset(),
+        },
+      });
+    },
+    async hover(iter_cursor) {
+      return lspc.request("textDocument/hover", {
+        textDocument: {
+          uri: file.get_uri(),
+        },
+        position: {
+          line: iter_cursor.get_line(),
+          character: iter_cursor.get_line_offset() + 1,
+        },
+      });
+    },
     async update() {
       return lspc.didChange();
     },
