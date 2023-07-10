@@ -25,21 +25,22 @@ const CompletionProvider = GObject.registerClass(
     Implements: [Source.CompletionProvider],
   },
   class CompletionProvider extends Workbench.CompletionProvider {
-    constructor(source_view) {
-      super();
-      this.source_view = source_view;
-    }
-
     vfunc_activate(context, proposal) {
-      console.log(proposal);
-      this.source_view.push_snippet(
-        Source.Snippet.new_parsed(proposal.get_typed_text()),
-        null,
-      );
+      console.log("activate", proposal);
+      this.get_buffer()
+        .get_source_view()
+        .push_snippet(
+          Source.Snippet.new_parsed(proposal.get_typed_text()),
+          null,
+        );
     }
 
     vfunc_display(context, proposal, cell) {
-      log("display", proposal.label, cell.get_column());
+      // const [, start, end] = context.get_bounds();
+      // const text = this.buffer.get_text(start, end, false);
+      if (text.startsWith(context.get_word())) return null;
+
+      // log("display", proposal.label, cell.get_column());
       switch (cell.get_column()) {
         // case Source.CompletionColumn.ICON:
         //   var image = new Gtk.Image ();
@@ -147,47 +148,43 @@ class CodeView extends Gtk.Widget {
   }
 
   #prepareCompletionProvider() {
-    const completion_provider = new CompletionProvider(this.source_view);
+    const completion_provider = new CompletionProvider();
 
     completion_provider.connect("completion-request", (provider, request) => {
       console.log(`completion-request: ${request.context.get_word()}`);
 
-      const iter_cursor = request.context.get_bounds()[1];
+      const [, start, end] = request.context.get_bounds();
+      const text = this.buffer.get_text(start, end, false);
 
       // log(request.context.get_proposals_for_provider(completion_provider));
 
-      console.log(iter_cursor.get_line(), iter_cursor.get_line_offset());
-      // log(request.context.get_word());
-      this.blueprint
-        .completion(iter_cursor)
+      console.log({
+        start: {
+          line: start.get_line(),
+          offset: start.get_line_offset(),
+        },
+        end: {
+          line: end.get_line(),
+          offset: end.get_line_offset(),
+        },
+        text,
+      });
+
+      this.css
+        .completion(end)
         .then((result) => {
-          log("lol", result.length);
-          // log(result.length);
-          // log(result);
-          // console.log(result[0]);
-          // result.forEach((p) => {
-          //   log(Object.keys(p));
-          // });
+          log(result);
 
-          // const list_store = Gio.ListStore.new(GObject.TYPE_OBJECT);
-
-          // list_store.append(new Proposal());
-
-          // completion.context.set_proposals_for_provider()
-
-          // const item = new GtkSource.CompletionItem({
-          //   label: "do_something()",
-          //   text: "do_something()",
-          // });
-
-          if (result[0]) {
-            request.add(new Proposal(result[0]));
-          }
-
-          request.state_changed(Workbench.RequestState.COMPLETE);
+          result.forEach((completion) => {
+            if (completion.insertText?.startsWith(text)) {
+              request.add(new Proposal(completion));
+            }
+          });
         })
         .catch((err) => {
           logError(err);
+        })
+        .finally(() => {
           request.state_changed(Workbench.RequestState.COMPLETE);
         });
 

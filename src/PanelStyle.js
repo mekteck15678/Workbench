@@ -19,5 +19,7 @@ export default function PanelStyle({ builder, data_dir, document }) {
     "visible",
     GObject.BindingFlags.SYNC_CREATE,
   );
-  setupCSS({ data_dir, document });
+
+  const css = setupCSS({ data_dir, document });
+  document.code_view.css = css;
 }

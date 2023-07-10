@@ -16,6 +16,23 @@ export function setup({ data_dir, document }) {
     if (!code_view.buffer.get_modified()) return;
     lspc.didChange().catch(logError);
   });
+
+  return {
+    lspc,
+    async completion(iter_cursor) {
+      log(iter_cursor.get_line_offset());
+      // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
+      return lspc.request("textDocument/completion", {
+        textDocument: {
+          uri: file.get_uri(),
+        },
+        position: {
+          line: iter_cursor.get_line(),
+          character: iter_cursor.get_line_offset() - 1,
+        },
+      });
+    },
+  };
 }
 
 function createLSPClient({ uri, code_view, data_dir }) {
@@ -30,10 +47,14 @@ function createLSPClient({ uri, code_view, data_dir }) {
     console.debug("gtkcsslanguageserver language server exit");
   });
   lspc.connect("output", (_self, message) => {
-    console.debug(`gtkcsslanguageserver language server OUT:\n${JSON.stringify(message)}`);
+    console.debug(
+      `gtkcsslanguageserver language server OUT:\n${JSON.stringify(message)}`,
+    );
   });
   lspc.connect("input", (_self, message) => {
-    console.debug(`gtkcsslanguageserver language server IN:\n${JSON.stringify(message)}`);
+    console.debug(
+      `gtkcsslanguageserver language server IN:\n${JSON.stringify(message)}`,
+    );
   });
 
   // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics
