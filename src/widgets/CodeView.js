@@ -27,8 +27,8 @@ const CompletionProvider = GObject.registerClass(
   class CompletionProvider extends Workbench.CompletionProvider {
     vfunc_activate(context, proposal) {
       console.log("activate", proposal);
-      this.get_buffer()
-        .get_source_view()
+      context
+        .get_view()
         .push_snippet(
           Source.Snippet.new_parsed(proposal.get_typed_text()),
           null,
@@ -38,7 +38,7 @@ const CompletionProvider = GObject.registerClass(
     vfunc_display(context, proposal, cell) {
       // const [, start, end] = context.get_bounds();
       // const text = this.buffer.get_text(start, end, false);
-      if (text.startsWith(context.get_word())) return null;
+      // if (text.startsWith(context.get_word())) return null;
 
       // log("display", proposal.label, cell.get_column());
       switch (cell.get_column()) {
@@ -147,59 +147,50 @@ class CodeView extends Gtk.Widget {
     hover.add_provider(provider);
   }
 
+  #onCompletionRequest = (provider, request) => {
+    console.log(`completion-request: ${request.context.get_word()}`);
+
+    const [, start, end] = request.context.get_bounds();
+    const text = this.buffer.get_text(start, end, false);
+
+    // log(request.context.get_proposals_for_provider(completion_provider));
+
+    // console.log({
+    //   start: {
+    //     line: start.get_line(),
+    //     offset: start.get_line_offset(),
+    //   },
+    //   end: {
+    //     line: end.get_line(),
+    //     offset: end.get_line_offset(),
+    //   },
+    //   text,
+    // });
+
+    this.css
+      .completion(end)
+      .then((result) => {
+        log(result);
+
+        result.forEach((completion) => {
+          if (completion.insertText?.startsWith(text)) {
+            request.add(new Proposal(completion));
+          }
+        });
+      })
+      .catch(logError)
+      .finally(() => {
+        request.state_changed(Workbench.RequestState.COMPLETE);
+      });
+  };
+
   #prepareCompletionProvider() {
     const completion_provider = new CompletionProvider();
 
-    completion_provider.connect("completion-request", (provider, request) => {
-      console.log(`completion-request: ${request.context.get_word()}`);
-
-      const [, start, end] = request.context.get_bounds();
-      const text = this.buffer.get_text(start, end, false);
-
-      // log(request.context.get_proposals_for_provider(completion_provider));
-
-      console.log({
-        start: {
-          line: start.get_line(),
-          offset: start.get_line_offset(),
-        },
-        end: {
-          line: end.get_line(),
-          offset: end.get_line_offset(),
-        },
-        text,
-      });
-
-      this.css
-        .completion(end)
-        .then((result) => {
-          log(result);
-
-          result.forEach((completion) => {
-            if (completion.insertText?.startsWith(text)) {
-              request.add(new Proposal(completion));
-            }
-          });
-        })
-        .catch((err) => {
-          logError(err);
-        })
-        .finally(() => {
-          request.state_changed(Workbench.RequestState.COMPLETE);
-        });
-
-      /* Pass around the `request` object, calling `request.add()` to append
-       * completion proposals, then call `request.state_changed()` with
-       * `Workbench.RequestState.CANCELLED` or `Workbench.RequestState.COMPLETE`
-       * to finish the request (and async function).
-       */
-      // GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-      //   // request.state_changed(Workbench.RequestState.CANCELLED);
-      //   request.state_changed(Workbench.RequestState.COMPLETE);
-
-      //   return GLib.SOURCE_REMOVE;
-      // });
-    });
+    completion_provider.connect(
+      "completion-request",
+      this.#onCompletionRequest,
+    );
 
     // this.buffer.connect("notify::cursor-position", async (self) => {
     //   if (!this.blueprint) return;
@@ -212,6 +203,15 @@ class CodeView extends Gtk.Widget {
     //   }
     // });
     const completion = this.source_view.get_completion();
+
+    completion.connect("show", () => {
+      log("completion show");
+    });
+
+    completion.connect("hide", () => {
+      log("completion hide");
+    });
+
     completion.add_provider(completion_provider);
   }
 

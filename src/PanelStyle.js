@@ -20,5 +20,5 @@ export default function PanelStyle({ builder, document_css, settings }) {
   );
 
   const css = setupCSS({ document: document_css });
-  document.code_view.css = css;
+  document_css.code_view.css = css;
 }
